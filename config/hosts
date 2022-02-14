@@ -1,0 +1,3 @@
+192.168.56.10  k-master.singleton.net master
+192.168.56.11  k-node1.singleton.net node1
+192.168.56.12  k-node2.singleton.net node2
