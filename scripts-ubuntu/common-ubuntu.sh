@@ -11,12 +11,9 @@ log()
 ###############################################################################
 systemUpdate()
 {
-   log "Updating System pkgs"
-   sudo mkdir /etc/yum.repos.d/EPEL-SAVE
-   sudo mv /etc/yum.repos.d/epel* /etc/yum.repos.d/EPEL-SAVE
-   sudo yum update -y
-   sudo yum install -y yum-utils net-tools curl
-   sudo yum install -y iproute-tc
+   sudo apt update -y
+   sudo apt install -y yum-utils net-tools curl
+   sudo apt install -y iproute-tc
 }
 
 ###############################################################################
@@ -65,81 +62,47 @@ EOF
  sudo modprobe br_netfilter
  sudo lsmod | grep br_netfilter
 }
-
 ###############################################################################
 installDocker()
 {
-  log "Removing podman (default now on centos)"
-  sudo dnf remove podman
-  sudo dnf remove containers-common-1.2.2-10.module_el8.4.0+830+8027e1c4.x86_64
-
-  log "Installing docker-ce"
-  sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-  sudo dnf install docker-ce -y
-
-  log "Creating centos user."
-  sudo useradd -p $(openssl passwd -crypt centos) centos
-  
-  log "Adding centos user as part o docker and sudo groups"
-  sudo usermod -aG docker centos
-  sudo usermod -aG wheel  centos
-  sudo mkdir /home/centos/.ssh
-  sudo cp /vagrant/config/id_rsa.pub /home/centos/.ssh/authorized_keys
-  sudo chmod 700 /home/centos/.ssh/authorized_keys
-  sudo chown -R centos.centos /home/centos/.ssh
-
-  log "Apply recomanded kubernetes configuration"
-  sudo mkdir /etc/docker
-  sudo tee /etc/docker/daemon.json<<EOF
-{
-    "exec-opts": ["native.cgroupdriver=systemd"],
-    "log-driver": "json-file",
-    "log-opts": {
-      "max-size": "100m"
-    },
-    "storage-driver": "overlay2"
+  log "install docker"
+ sudo apt-get remove docker docker-engine docker.io containerd runc
+ sudo apt-get update
+ sudo apt-get install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+ echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update
+  sudo apt-get install docker-ce docker-ce-cli containerd.io
 }
-EOF
-
-  log "Enable Docker."
-  sudo systemctl enable docker
-  sudo systemctl daemon-reload
-  sudo systemctl restart docker
-  sudo systemctl status docker
-
-  log "Verify docker HelloWorld"
-  sudo docker run hello-world
-}
-
 ###############################################################################
 installKubernetes()
 {
-  log "Add Kubernetes repository"
-sudo tee /etc/yum.repos.d/kubernetes.repo<<EOF
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+  log "setup Kubernetes"
+sudo apt-get update && sudo apt-get install -y apt-transport-https curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
+deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
+  log "update the repo"
+sudo apt-get update
+  log "setup kubelet kubeadm and kubectl"
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
 
-  log "Add some settings to sysctl"
-sudo tee /etc/sysctl.d/k8s.conf<<EOF
-net.bridge.bridge-nf-call-ip6tables = 1
-net.bridge.bridge-nf-call-iptables = 1
-net.ipv4.ip_forward = 1
-EOF
+  log "relaunch kubelet"
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
 
-  log "Install Kubernetes"
-  sudo dnf install kubeadm kubectl -y
-  sudo systemctl enable kubelet
-  sudo systemctl start kubelet
 }
 
 ###############################################################################
 systemUpdate
 systemSettings
-installDocker
 installKubernetes
+installDocker

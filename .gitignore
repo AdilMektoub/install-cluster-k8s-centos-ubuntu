@@ -132,3 +132,6 @@ dmypy.json
 join-cluster.sh
 id_rsa.pub
 kube-config
+
+# vagrant
+.vagrant
